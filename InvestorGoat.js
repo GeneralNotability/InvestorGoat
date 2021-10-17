@@ -1,37 +1,44 @@
+// <nowiki>
 // InvestorGoat, a suite of CheckUser tools.
 // Parts taken from https://en.wikipedia.org/wiki/User:Firefly/checkuseragenthelper.js
-/* global mw, $ */
+/* global mw, $, UAParser */
 
-const InvestorGoatUAMap = new Map()
-let InvestorGoatCompareTarget = null
 $(async function ($) {
   if (mw.config.get('wgPageName') === 'Special:CheckUser') {
-    await mw.loader.getScript('https://en.wikipedia.org/w/index.php?title=User:GeneralNotability/ua-parser.min.js&action=raw&ctype=text/javascript')
-    $('.mw-checkuser-agent').each(async function () {
-      const $el = $(this)
-      const ua = $el.text()
-      const parser = new UAParser()
-      if (!InvestorGoatUAMap.has(ua)) {
-        parser.setUA(ua)
-        const uaObj = parser.getResult()
-        InvestorGoatUAMap.set(ua, uaObj)
-      }
-      // Add indicators
-      $('<span>').addClass('InvestorGoat-device').text('DEV').css({ margin: '2px' }).appendTo($el.parent())
-      $('<span>').addClass('InvestorGoat-OS').text('OS').css({ margin: '2px' }).appendTo($el.parent())
-      $('<span>').addClass('InvestorGoat-browser').text('BR').css({ margin: '2px' }).appendTo($el.parent())
-
-      // Set up dummy link
-      const $link = $('<a>').attr('href', '#').on('click', InvestorGoatUAClicked)
-      $link.insertAfter($el)
-      $el.detach()
-      $link.append($el)
-    })
+    await mw.loader.using('mediawiki.util')
+    InvestorGoatPrepUAs()
+    mw.hook('wikipage.content').add(InvestorGoatIPHook)
   }
 })
 
+const InvestorGoatUAMap = new Map()
+let InvestorGoatCompareTarget = null
+
+async function InvestorGoatPrepUAs () {
+  await mw.loader.getScript('https://en.wikipedia.org/w/index.php?title=User:GeneralNotability/ua-parser.min.js&action=raw&ctype=text/javascript')
+  $('.mw-checkuser-agent').each(async function () {
+    const $el = $(this)
+    const ua = $el.text()
+    const parser = new UAParser()
+    if (!InvestorGoatUAMap.has(ua)) {
+      parser.setUA(ua)
+      const uaObj = parser.getResult()
+      InvestorGoatUAMap.set(ua, uaObj)
+    }
+    // Add indicators
+    $('<span>').addClass('InvestorGoat-device').text('DEV').css({ margin: '2px' }).appendTo($el.parent())
+    $('<span>').addClass('InvestorGoat-OS').text('OS').css({ margin: '2px' }).appendTo($el.parent())
+    $('<span>').addClass('InvestorGoat-browser').text('BR').css({ margin: '2px' }).appendTo($el.parent())
+
+    // Set up dummy link
+    const $link = $('<a>').attr('href', '#').on('click', InvestorGoatUAClicked)
+    $link.insertAfter($el)
+    $el.detach()
+    $link.append($el)
+  })
+}
+
 async function InvestorGoatUAClicked (event) {
-  console.log(event)
   InvestorGoatCompareTarget = InvestorGoatUAMap.get($(event.target).text())
   InvestorGoatUpdateUAColors()
   event.preventDefault()
@@ -50,8 +57,6 @@ async function InvestorGoatUpdateUAColors () {
   $('.mw-checkuser-agent').each(async function () {
     const $el = $(this)
     const uaObj = InvestorGoatUAMap.get($el.text())
-    console.log(InvestorGoatCompareTarget)
-    console.log(uaObj)
 
     const $devEl = $el.parent().parent().children('.InvestorGoat-device')
     if (uaObj.device.type !== InvestorGoatCompareTarget.device.type) {
@@ -83,3 +88,101 @@ async function InvestorGoatUpdateUAColors () {
     }
   })
 }
+
+const InvestorGoatSPECIALIPS = [
+  { addr: '10.0.0.0', cidr: 8, color: 'red', hint: 'Internal IP' },
+  { addr: '172.16.0.0', cidr: 12, color: 'red', hint: 'Internal IP' },
+  { addr: '192.168.0.0', cidr: 16, color: 'red', hint: 'Internal IP' },
+  { addr: '127.0.0.0', cidr: 8, color: 'red', hint: 'Loopback (WTF?)' },
+  { addr: '185.15.56.0', cidr: 22, color: 'yellow', hint: 'WMF IP' },
+  { addr: '91.198.174.0', cidr: 24, color: 'yellow', hint: 'WMF IP' },
+  { addr: '198.35.26.0', cidr: 23, color: 'yellow', hint: 'WMF IP' },
+  { addr: '208.80.152.0', cidr: 22, color: 'yellow', hint: 'WMF IP' },
+  { addr: '103.102.166.0', cidr: 24, color: 'yellow', hint: 'WMF IP' },
+  { addr: '143.228.0.0', cidr: 16, color: 'orange', hint: 'US Congress' },
+  { addr: '12.185.56.0', cidr: 29, color: 'orange', hint: 'US Congress' },
+  { addr: '12.147.170.144', cidr: 28, color: 'orange', hint: 'US Congress' },
+  { addr: '74.119.128.0', cidr: 22, color: 'orange', hint: 'US Congress' },
+  { addr: '156.33.0.0', cidr: 16, color: 'orange', hint: 'US Congress' },
+  { addr: '165.119.0.0', cidr: 16, color: 'orange', hint: 'Executive Office of the President' },
+  { addr: '198.137.240.0', cidr: 23, color: 'orange', hint: 'Executive Office of the President' },
+  { addr: '204.68.207.0', cidr: 24, color: 'orange', hint: 'Executive Office of the President' },
+  { addr: '149.101.0.0', cidr: 16, color: 'orange', hint: 'US Department of Justice' },
+  { addr: '65.165.132.0', cidr: 24, color: 'orange', hint: 'US Dept of Homeland Security' },
+  { addr: '204.248.24.0', cidr: 24, color: 'orange', hint: 'US Dept of Homeland Security' },
+  { addr: '216.81.80.0', cidr: 20, color: 'orange', hint: 'US Dept of Homeland Security' },
+  { addr: '131.132.0.0', cidr: 14, color: 'orange', hint: 'Canadian Dept of National Defence' },
+  { addr: '131.136.0.0', cidr: 14, color: 'orange', hint: 'Canadian Dept of National Defence' },
+  { addr: '131.140.0.0', cidr: 15, color: 'orange', hint: 'Canadian Dept of National Defence' },
+  { addr: '192.197.82.0', cidr: 24, color: 'orange', hint: 'Canadian House of Commons' },
+  { addr: '194.60.0.0', cidr: 18, color: 'orange', hint: 'UK Parliament' },
+  { addr: '138.162.0.0', cidr: 16, color: 'orange', hint: 'US Department of the Navy' }
+]
+
+function InvestorGoatIsIPInRange (addr, targetRange, targetCidr) {
+  // https://stackoverflow.com/questions/503052/javascript-is-ip-in-one-of-these-subnets
+  const mask = -1 << (32 - +targetCidr) // eslint-disable-line no-bitwise
+  if (mw.util.isIPv4Address(addr, false)) {
+    const addrMatch = addr.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+    const addrInt = (+addrMatch[1] << 24) + (+addrMatch[2] << 16) + (+addrMatch[3] << 8) + // eslint-disable-line no-bitwise
+      (+addrMatch[4]) // eslint-disable-line no-bitwise
+    const targetMatch = targetRange.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/)
+    const targetInt = (+targetMatch[1] << 24) + (+targetMatch[2] << 16) + (+targetMatch[3] << 8) + // eslint-disable-line no-bitwise
+      (+targetMatch[4]) // eslint-disable-line no-bitwise
+    return (addrInt & mask) === (targetInt & mask) // eslint-disable-line no-bitwise
+  }
+  // TODO: figure out ipv6
+}
+/**
+ * Get all IP userlinks on the page
+ *
+ * @param {JQuery} $content page contents
+ * @return {Map} list of unique users on the page and their corresponding links
+ */
+function InvestorGoatGetBlockLinks ($content) {
+  const userLinks = new Map()
+
+  const blockLinkRe = '^Special:Block/(.*)$'
+  $('a', $content).each(function () {
+    if (!$(this).attr('title')) {
+      // Ignore if the <a> doesn't have a title
+      return
+    }
+    const blockLinkMatch = $(this).attr('title').toString().match(blockLinkRe)
+    if (!blockLinkMatch) {
+      return
+    }
+    const user = decodeURIComponent(blockLinkMatch[1])
+    if (mw.util.isIPAddress(user)) {
+      if (!userLinks.get(user)) {
+        userLinks.set(user, [])
+      }
+      userLinks.get(user).push($(this))
+    }
+  })
+  return userLinks
+}
+
+async function InvestorGoatIPHook ($content) {
+  const usersOnPage = InvestorGoatGetBlockLinks($content)
+  usersOnPage.forEach(async (val, key, _) => {
+    let color = ''
+    let hint = ''
+    for (const range of InvestorGoatSPECIALIPS) {
+      if (InvestorGoatIsIPInRange(key, range.addr, range.cidr)) {
+        color = range.color
+        hint = range.hint
+        break
+      }
+    }
+    if (!color) {
+      return
+    }
+    val.forEach(($link) => {
+      $link.css({ backgroundColor: color })
+      $link.attr('title', hint)
+    })
+  })
+}
+
+// </nowiki>
