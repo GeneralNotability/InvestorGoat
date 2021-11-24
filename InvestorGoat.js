@@ -8,6 +8,7 @@ $(async function ($) {
     await mw.loader.using('mediawiki.util')
     InvestorGoatPrepUAs()
     mw.hook('wikipage.content').add(InvestorGoatIPHook)
+    mw.hook('wikipage.content').add(InvestorGoatAddQuickReasonBoxHook)
   }
 })
 
@@ -133,6 +134,7 @@ function InvestorGoatIsIPInRange (addr, targetRange, targetCidr) {
   }
   // TODO: figure out ipv6
 }
+
 /**
  * Get all IP userlinks on the page
  *
@@ -185,4 +187,41 @@ async function InvestorGoatIPHook ($content) {
   })
 }
 
+const InvestorGoatCHECKREASONS = [
+  { label: 'Check type (optional)', selected: true, value: '', disabled: true },
+  { label: 'SPI-related', selected: false, value: 'spi' },
+  { label: 'Second Opinion', selected: false, value: '2o' },
+  { label: 'Unblock Request', selected: false, value: 'unblock' },
+  { label: 'IPBE Request', selected: false, value: 'ipbe' },
+  { label: 'CU/Paid Queue', selected: false, value: 'q' },
+  { label: 'Suspected LTA', selected: false, value: 'lta' },
+  { label: 'Comparison to ongoing CU', selected: false, value: 'comp' },
+  { label: 'Collateral check', selected: false, value: 'coll' },
+  { label: 'Discretionary check', selected: false, value: 'fish' }
+]
+
+function InvestorGoatAddQuickReasonBoxHook($content) {
+  const $select = $('<select>')
+  for (const reason of InvestorGoatCHECKREASONS) {
+    $('<option>')
+      .val(reason.value)
+      .prop('selected', reason.selected)
+      .text(reason.label)
+      .prop('disabled', reason.disabled)
+      .appendTo($select)
+  }
+
+  $select.on('change', function (e) {
+    InvestorGoatAddQuickReason(e.target)
+  })
+
+  const $target = $('#checkreason', $content)
+
+  $select.insertBefore($target)
+}
+
+function InvestorGoatAddQuickReason (source) {
+  const $inputField = $('#checkreason')
+  $inputField.val('[' + source.val() + '] ' + $inputField.val())
+}
 // </nowiki>
