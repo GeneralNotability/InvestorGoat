@@ -9,8 +9,8 @@ $(async function ($) {
     InvestorGoatPrepUAs()
     mw.hook('wikipage.content').add(InvestorGoatIPHook)
     mw.hook('wikipage.content').add(InvestorGoatAddQuickReasonBoxHook)
-    mw.hook('wikipage.content').add(InvestorGoatHighlightLogs)
   }
+  mw.hook('wikipage.content').add(InvestorGoatHighlightLogs)
 })
 
 const InvestorGoatUAMap = new Map()
