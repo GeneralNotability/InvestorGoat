@@ -4,11 +4,12 @@
 /* global mw, $, UAParser */
 
 $(async function ($) {
-  if (mw.config.get('wgPageName') === 'Special:CheckUser') {
+  if (mw.config.get('wgPageName').startsWith('Special:CheckUser')) {
     await mw.loader.using('mediawiki.util')
     InvestorGoatPrepUAs()
     mw.hook('wikipage.content').add(InvestorGoatIPHook)
     mw.hook('wikipage.content').add(InvestorGoatAddQuickReasonBoxHook)
+    mw.hook('wikipage.content').add(InvestorGoatHighlightLogs)
   }
 })
 
@@ -194,13 +195,14 @@ const InvestorGoatCHECKREASONS = [
   { label: 'Unblock Request', selected: false, value: 'unblock' },
   { label: 'IPBE Request', selected: false, value: 'ipbe' },
   { label: 'CU/Paid Queue', selected: false, value: 'q' },
+  { label: 'Suspected known sockmaster', selected: false, value: 'sock' },
   { label: 'Suspected LTA', selected: false, value: 'lta' },
   { label: 'Comparison to ongoing CU', selected: false, value: 'comp' },
   { label: 'Collateral check', selected: false, value: 'coll' },
   { label: 'Discretionary check', selected: false, value: 'fish' }
 ]
 
-function InvestorGoatAddQuickReasonBoxHook($content) {
+function InvestorGoatAddQuickReasonBoxHook ($content) {
   const $select = $('<select>')
   for (const reason of InvestorGoatCHECKREASONS) {
     $('<option>')
@@ -212,12 +214,49 @@ function InvestorGoatAddQuickReasonBoxHook($content) {
   }
 
   $select.on('change', function (e) {
-    InvestorGoatAddQuickReason(e.target)
+    InvestorGoatAddQuickReason($(e.target))
   })
 
   const $target = $('#checkreason', $content)
 
   $select.insertBefore($target)
+}
+
+/**
+ * Highlight CU log links where the log exists
+ *
+ * @param {JQuery} $content page contents
+ */
+function InvestorGoatHighlightLogs ($content) {
+  const cuSearchTargetRe = 'cuSearch=(.*)'
+  $('a.external.text', $content).each(async function () {
+    if (!$(this).attr('href')) {
+      // Ignore if the <a> doesn't have a title
+      return
+    }
+    const cuTargetMatch = $(this).attr('href').toString().match(cuSearchTargetRe)
+    if (!cuTargetMatch) {
+      return
+    }
+    const target = decodeURIComponent(cuTargetMatch[1])
+    const api = new mw.Api()
+    const request = {
+      action: 'query',
+      list: 'checkuserlog',
+      cultarget: target
+    }
+    try {
+      const response = await api.get(request)
+      const checkCount = response.query.checkuserlog.entries.length
+      if (checkCount > 0) {
+        $(this).attr('title', `${checkCount} checks`)
+        // Have to use .style vice .css because .css doesn't understand !important
+        $(this).attr('style', 'background-color: lightgreen !important')
+      }
+    } catch (error) {
+      console.log(`Error checking CU log: ${error}`)
+    }
+  })
 }
 
 function InvestorGoatAddQuickReason (source) {
