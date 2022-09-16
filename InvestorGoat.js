@@ -76,26 +76,26 @@ async function InvestorGoatPrepUAs () {
       const ua = $el.text()
       const val = InvestorGoatUAMap.get(ua)
       // Add indicators
-      $('<span>').addClass('InvestorGoat-seen').text('#️⃣').css({ margin: '2px' })
+      $('<span>').addClass('InvestorGoat-seen').text('#️⃣').css({ margin: '2px', 'user-select': 'none' })
         .attr('title', `Estimated popularity: ${Math.pow(10, Math.floor(Math.log10(val.user_agent_metadata.times_seen))).toLocaleString()}s`).appendTo($el.parent().parent())
       if (val.parse.is_weird) {
-        $('<span>').addClass('InvestorGoat-weird').text('❓').css({ margin: '2px' })
+        $('<span>').addClass('InvestorGoat-weird').text('❓').css({ margin: '2px', 'user-select': 'none' })
           .attr('title', `UA flagged as weird: ${val.parse.is_weird_reason_code}`).appendTo($el.parent().parent())
       }
       if (val.parse.is_abusive) {
-        $('<span>').addClass('InvestorGoat-abusive').text('‼️').css({ margin: '2px' })
+        $('<span>').addClass('InvestorGoat-abusive').text('‼️').css({ margin: '2px', 'user-select': 'none' })
           .attr('title', 'UA flagged as abusive').appendTo($el.parent().parent())
       }
       if (val.parse.is_spam) {
-        $('<span>').addClass('InvestorGoat-spam').text('🥫').css({ margin: '2px' })
+        $('<span>').addClass('InvestorGoat-spam').text('🥫').css({ margin: '2px', 'user-select': 'none' })
           .attr('title', 'UA flagged as spam').appendTo($el.parent().parent())
       }
       if (val.parse.is_restricted) {
-        $('<span>').addClass('InvestorGoat-restricted').text('🛑').css({ margin: '2px' })
+        $('<span>').addClass('InvestorGoat-restricted').text('🛑').css({ margin: '2px', 'user-select': 'none' })
           .attr('title', 'UA flagged as restricted').appendTo($el.parent().parent())
       }
       if (val.parse.software_type === 'bot') {
-        $('<span>').addClass('InvestorGoat-bot').text('🤖').css({ margin: '2px' })
+        $('<span>').addClass('InvestorGoat-bot').text('🤖').css({ margin: '2px', 'user-select': 'none' })
           .attr('title', `UA flagged as bot: ${val.parse.software_sub_type}`).appendTo($el.parent().parent())
       }
     })
