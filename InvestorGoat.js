@@ -24,9 +24,9 @@ async function InvestorGoatPrepUAs () {
     const ua = $el.text()
 
     // Add indicators
-    $('<span>').addClass('InvestorGoat-device').text('DEV').css({ margin: '2px' }).appendTo($el.parent())
-    $('<span>').addClass('InvestorGoat-OS').text('OS').css({ margin: '2px' }).appendTo($el.parent())
-    $('<span>').addClass('InvestorGoat-browser').text('BR').css({ margin: '2px' }).appendTo($el.parent())
+    $('<span>').addClass('InvestorGoat-device').text('DEV').css({ margin: '2px', 'user-select': 'none' }).appendTo($el.parent())
+    $('<span>').addClass('InvestorGoat-OS').text('OS').css({ margin: '2px', 'user-select': 'none' }).appendTo($el.parent())
+    $('<span>').addClass('InvestorGoat-browser').text('BR').css({ margin: '2px', 'user-select': 'none' }).appendTo($el.parent())
     if (InvestorGoatwmbApiKey) {
       if (!InvestorGoatUAMap.has(ua)) {
         InvestorGoatUAMap.set(ua, null)
