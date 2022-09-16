@@ -343,6 +343,7 @@ const InvestorGoatCHECKREASONS = [
   { label: 'Suspected LTA', selected: false, value: 'lta' },
   { label: 'Comparison to ongoing CU', selected: false, value: 'comp' },
   { label: 'Collateral check', selected: false, value: 'coll' },
+  { label: 'Cross-wiki request', selected: false, value: 'xwiki' },
   { label: 'Discretionary check', selected: false, value: 'fish' },
   { label: 'Self-check for testing', selected: false, value: 'test' }
 ]
@@ -362,7 +363,7 @@ function InvestorGoatAddQuickReasonBoxHook ($content) {
     InvestorGoatAddQuickReason($(e.target))
   })
 
-  const $target = $('#checkreason', $content)
+  const $target = $('[name=reason]', $content)
 
   $select.insertBefore($target)
 }
@@ -383,20 +384,29 @@ function InvestorGoatHighlightLogs ($content) {
     if (!cuTargetMatch) {
       return
     }
-    const target = decodeURIComponent(cuTargetMatch[1])
+    const target = decodeURIComponent(cuTargetMatch[1]).replaceAll('+', ' ')
     const api = new mw.Api()
     const request = {
       action: 'query',
       list: 'checkuserlog',
-      cultarget: target
+      cultarget: target,
+      cullimit: 100
     }
     try {
       const response = await api.get(request)
-      const checkCount = response.query.checkuserlog.entries.length
+      const filteredEntries = response.query.checkuserlog.entries.filter(entry =>
+          !entry.target.includes('/') || parseInt(entry.target.split('/')[1]) >= 16)
+      const checkCount = filteredEntries.length
       if (checkCount > 0) {
         $(this).attr('title', `${checkCount} checks`)
+        let color = ''
+        if (response.query.checkuserlog.entries[0].checkuser === mw.config.get('wgUserName')) {
+          color = 'lightskyblue'
+        } else {
+          color = 'lightgreen'
+        }
         // Have to use .style vice .css because .css doesn't understand !important
-        $(this).attr('style', 'background-color: lightgreen !important')
+        $(this).attr('style', `background-color: ${color} !important`)
       }
     } catch (error) {
       console.log(`Error checking CU log: ${error}`)
@@ -405,7 +415,7 @@ function InvestorGoatHighlightLogs ($content) {
 }
 
 function InvestorGoatAddQuickReason (source) {
-  const $inputField = $('#checkreason')
+  const $inputField = $('[name=reason]')
   $inputField.val('[' + source.val() + '] ' + $inputField.val())
 }
 // </nowiki>
