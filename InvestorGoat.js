@@ -4,7 +4,7 @@
 /* global mw, $, UAParser */
 
 $(async function ($) {
-  if (mw.config.get('wgPageName').startsWith('Special:CheckUser')) {
+  if (mw.config.get('wgCanonicalSpecialPageName') && mw.config.get('wgCanonicalSpecialPageName').startsWith('CheckUser')) {
     await mw.loader.using('mediawiki.util')
     InvestorGoatPrepUAs()
     mw.hook('wikipage.content').add(InvestorGoatIPHook)
@@ -13,6 +13,7 @@ $(async function ($) {
   mw.hook('wikipage.content').add(InvestorGoatHighlightLogs)
 })
 
+const InvestorGoatwmbApiKey = mw.user.options.get('userjs-wmbkey')
 const InvestorGoatUAMap = new Map()
 let InvestorGoatCompareTarget = null
 
@@ -21,16 +22,23 @@ async function InvestorGoatPrepUAs () {
   $('.mw-checkuser-agent').each(async function () {
     const $el = $(this)
     const ua = $el.text()
-    const parser = new UAParser()
-    if (!InvestorGoatUAMap.has(ua)) {
-      parser.setUA(ua)
-      const uaObj = parser.getResult()
-      InvestorGoatUAMap.set(ua, uaObj)
-    }
+
     // Add indicators
     $('<span>').addClass('InvestorGoat-device').text('DEV').css({ margin: '2px' }).appendTo($el.parent())
     $('<span>').addClass('InvestorGoat-OS').text('OS').css({ margin: '2px' }).appendTo($el.parent())
     $('<span>').addClass('InvestorGoat-browser').text('BR').css({ margin: '2px' }).appendTo($el.parent())
+    if (InvestorGoatwmbApiKey) {
+      if (!InvestorGoatUAMap.has(ua)) {
+        InvestorGoatUAMap.set(ua, null)
+      }
+    } else {
+      const parser = new UAParser()
+      if (!InvestorGoatUAMap.has(ua)) {
+        parser.setUA(ua)
+        const uaObj = parser.getResult()
+        InvestorGoatUAMap.set(ua, uaObj)
+      }
+    }
 
     // Set up dummy link
     const $link = $('<a>').attr('href', '#').on('click', InvestorGoatUAClicked)
@@ -38,23 +46,76 @@ async function InvestorGoatPrepUAs () {
     $el.detach()
     $link.append($el)
   })
+
+  if (InvestorGoatwmbApiKey && InvestorGoatUAMap.size > 0) {
+    // Do a batch query if we're using the WhatIsMyBrowser API
+    const query = {}
+    query.user_agents = {}
+    query.parse_options = {
+      return_metadata_for_useragent: true
+    }
+    for (const [key, _] of InvestorGoatUAMap.entries()) {
+      query.user_agents[key] = key
+    }
+    const result = await $.ajax({
+      type: 'post',
+      url: 'https://api.whatismybrowser.com/api/v2/user_agent_parse_batch',
+      data: JSON.stringify(query),
+      headers: {
+        'x-api-key': InvestorGoatwmbApiKey
+      }
+    })
+    console.log(result)
+    for (const [key, value] of Object.entries(result.parses)) {
+      InvestorGoatUAMap.set(key, value)
+    }
+
+    // Flag interesting results
+    $('.mw-checkuser-agent').each(async function () {
+      const $el = $(this)
+      const ua = $el.text()
+      const val = InvestorGoatUAMap.get(ua)
+      // Add indicators
+      $('<span>').addClass('InvestorGoat-seen').text('#️⃣').css({ margin: '2px' })
+        .attr('title', `Estimated popularity: ${Math.pow(10, Math.floor(Math.log10(val.user_agent_metadata.times_seen))).toLocaleString()}s`).appendTo($el.parent().parent())
+      if (val.parse.is_weird) {
+        $('<span>').addClass('InvestorGoat-weird').text('❓').css({ margin: '2px' })
+          .attr('title', `UA flagged as weird: ${val.parse.is_weird_reason_code}`).appendTo($el.parent().parent())
+      }
+      if (val.parse.is_abusive) {
+        $('<span>').addClass('InvestorGoat-abusive').text('‼️').css({ margin: '2px' })
+          .attr('title', 'UA flagged as abusive').appendTo($el.parent().parent())
+      }
+      if (val.parse.is_spam) {
+        $('<span>').addClass('InvestorGoat-spam').text('🥫').css({ margin: '2px' })
+          .attr('title', 'UA flagged as spam').appendTo($el.parent().parent())
+      }
+      if (val.parse.is_restricted) {
+        $('<span>').addClass('InvestorGoat-restricted').text('🛑').css({ margin: '2px' })
+          .attr('title', 'UA flagged as restricted').appendTo($el.parent().parent())
+      }
+      if (val.parse.software_type === 'bot') {
+        $('<span>').addClass('InvestorGoat-bot').text('🤖').css({ margin: '2px' })
+          .attr('title', `UA flagged as bot: ${val.parse.software_sub_type}`).appendTo($el.parent().parent())
+      }
+    })
+  }
 }
 
 async function InvestorGoatUAClicked (event) {
   InvestorGoatCompareTarget = InvestorGoatUAMap.get($(event.target).text())
-  InvestorGoatUpdateUAColors()
+  if (InvestorGoatwmbApiKey) {
+    InvestorGoatUpdateUAColorsWmb()
+  } else {
+    InvestorGoatUpdateUAColors()
+  }
   event.preventDefault()
 }
 
 async function InvestorGoatUpdateUAColors () {
   const match = { backgroundColor: 'DarkGreen', color: 'white' }
   const familyMismatch = { backgroundColor: 'DarkRed', color: 'white' }
-  const majorVersionSelectedBehind = { backgroundColor: 'purple', color: 'white' }
   const majorVersionSelectedAhead = { backgroundColor: 'orange', color: 'black' }
-  const minorVersionSelectedBehind = { backgroundColor: 'DarkBlue', color: 'white' }
-  const minorVersionSelectedAhead = { backgroundColor: 'Yellow', color: 'black' }
-  const patchVersionSelectedBehind = { backgroundColor: 'Turquoise', color: 'white' }
-  const patchVersionSelectedAhead = { backgroundColor: 'YellowGreen', color: 'black' }
 
   $('.mw-checkuser-agent').each(async function () {
     const $el = $(this)
@@ -87,6 +148,88 @@ async function InvestorGoatUpdateUAColors () {
       $browserEl.css(majorVersionSelectedAhead).attr('title', `Browser version mismatch, selected is ${InvestorGoatCompareTarget.browser.version}`)
     } else {
       $browserEl.css(match).attr('title', 'Browsers match')
+    }
+  })
+}
+
+async function InvestorGoatUpdateUAColorsWmb () {
+  const match = { backgroundColor: 'DarkGreen', color: 'white' }
+  const totalMismatch = { backgroundColor: 'DarkRed', color: 'white' }
+  const majorMismatch = { backgroundColor: 'orange', color: 'black' }
+  const minorMismatch = { backgroundColor: 'Yellow', color: 'black' }
+
+  const versionSelectedBehind = { backgroundColor: 'DarkBlue', color: 'white' }
+  const versionSelectedAhead = { backgroundColor: 'Yellow', color: 'black' }
+
+  $('.mw-checkuser-agent').each(async function () {
+    const $el = $(this)
+    const uaObj = InvestorGoatUAMap.get($el.text())
+
+    const $devEl = $el.parent().parent().children('.InvestorGoat-device')
+    if (uaObj.parse.hardware_type !== InvestorGoatCompareTarget.parse.hardware_type) {
+      $devEl.css(totalMismatch).attr('title', `Device type mismatch, this is "${uaObj.parse.hardware_type}", selected is "${InvestorGoatCompareTarget.parse.hardware_type}"`)
+    } else if (uaObj.parse.hardware_sub_type !== InvestorGoatCompareTarget.parse.hardware_sub_type) {
+      $devEl.css(majorMismatch).attr('title', `Device subtype mismatch, this is "${uaObj.parse.hardware_sub_type}", selected is "${InvestorGoatCompareTarget.parse.hardware_sub_type}"`)
+    } else if (uaObj.parse.hardware_sub_sub_type !== InvestorGoatCompareTarget.parse.hardware_sub_sub_type) {
+      $devEl.css(minorMismatch).attr('title', `Device sub-subtype mismatch, this is "${uaObj.parse.hardware_sub_sub_type}", selected is "${InvestorGoatCompareTarget.parse.hardware_sub_sub_type}"`)
+    } else if (uaObj.parse.simple_operating_platform_string !== InvestorGoatCompareTarget.parse.simple_operating_platform_string) {
+      $devEl.css(totalMismatch).attr('title', `Platform mismatch, this is "${uaObj.parse.simple_operating_platform_string}", selected is "${InvestorGoatCompareTarget.parse.simple_operating_platform_string}"`)
+    } else {
+      $devEl.css(match).attr('title', 'Devices match')
+    }
+
+    const $osEl = $el.parent().parent().children('.InvestorGoat-OS')
+    if (uaObj.parse.operating_system_name_code !== InvestorGoatCompareTarget.parse.operating_system_name_code) {
+      $osEl.css(totalMismatch).attr('title', `OS mismatch, this is "${uaObj.parse.operating_system_name}", selected is ${InvestorGoatCompareTarget.parse.operating_system_name}`)
+    } else if (uaObj.parse.operating_system_flavour_code !== InvestorGoatCompareTarget.parse.operating_system_flavour_code) {
+      $osEl.css(majorMismatch).attr('title', `OS flavor mismatch, this is "${uaObj.parse.operating_system_flavour}", selected is ${InvestorGoatCompareTarget.parse.operating_system_flavour}`)
+    } else {
+      let mismatch = false
+      for (let i = 0; i < uaObj.parse.operating_system_version_full.length; i++) {
+        if (i >= InvestorGoatCompareTarget.parse.operating_system_version_full.length) {
+          break
+        }
+        if (parseInt(uaObj.parse.operating_system_version_full[i]) < parseInt(InvestorGoatCompareTarget.parse.operating_system_version_full[i])) {
+          $osEl.css(versionSelectedAhead).attr('title', 'OS version mismatch, selected version is newer than this')
+          mismatch = true
+          break
+        } else if (parseInt(uaObj.parse.operating_system_version_full[i]) > parseInt(InvestorGoatCompareTarget.parse.operating_system_version_full[i])) {
+          $osEl.css(versionSelectedBehind).attr('title', 'OS version mismatch, selected version is older than this')
+          mismatch = true
+          break
+        }
+      }
+      if (!mismatch) {
+        $osEl.css(match).attr('title', 'OSes match')
+      }
+    }
+
+    const $browserEl = $el.parent().parent().children('.InvestorGoat-browser')
+    if (uaObj.parse.software_type !== InvestorGoatCompareTarget.parse.software_type) {
+      $browserEl.css(totalMismatch).attr('title', `Software type mismatch, this is "${uaObj.parse.software_type}", selected is ${InvestorGoatCompareTarget.parse.software_type}`)
+    } else if (uaObj.parse.software_sub_type !== InvestorGoatCompareTarget.parse.software_sub_type) {
+      $browserEl.css(totalMismatch).attr('title', `Software subtype mismatch, this is "${uaObj.parse.software_sub_type}", selected is ${InvestorGoatCompareTarget.parse.software_sub_type}`)
+    } else if (uaObj.parse.software_name_code !== InvestorGoatCompareTarget.parse.software_name_code) {
+      $browserEl.css(totalMismatch).attr('title', `Browser mismatch, this is "${uaObj.parse.software_name}", selected is ${InvestorGoatCompareTarget.parse.software_name}`)
+    } else {
+      let mismatch = false
+      for (let i = 0; i < uaObj.parse.software_version_full.length; i++) {
+        if (i >= InvestorGoatCompareTarget.parse.software_version_full.length) {
+          break
+        }
+        if (parseInt(uaObj.parse.software_version_full[i]) < parseInt(InvestorGoatCompareTarget.parse.software_version_full[i])) {
+          $browserEl.css(versionSelectedAhead).attr('title', 'Browser version mismatch, selected version is newer than this')
+          mismatch = true
+          break
+        } else if (parseInt(uaObj.parse.software_version_full[i]) > parseInt(InvestorGoatCompareTarget.parse.software_version_full[i])) {
+          $browserEl.css(versionSelectedBehind).attr('title', 'Browser version mismatch, selected version is older than this')
+          mismatch = true
+          break
+        }
+      }
+      if (!mismatch) {
+        $browserEl.css(match).attr('title', 'Browsers match')
+      }
     }
   })
 }
@@ -194,12 +337,14 @@ const InvestorGoatCHECKREASONS = [
   { label: 'Second Opinion', selected: false, value: '2o' },
   { label: 'Unblock Request', selected: false, value: 'unblock' },
   { label: 'IPBE Request', selected: false, value: 'ipbe' },
+  { label: 'ACC Request', selected: false, value: 'acc' },
   { label: 'CU/Paid Queue', selected: false, value: 'q' },
   { label: 'Suspected known sockmaster', selected: false, value: 'sock' },
   { label: 'Suspected LTA', selected: false, value: 'lta' },
   { label: 'Comparison to ongoing CU', selected: false, value: 'comp' },
   { label: 'Collateral check', selected: false, value: 'coll' },
-  { label: 'Discretionary check', selected: false, value: 'fish' }
+  { label: 'Discretionary check', selected: false, value: 'fish' },
+  { label: 'Self-check for testing', selected: false, value: 'test' }
 ]
 
 function InvestorGoatAddQuickReasonBoxHook ($content) {
